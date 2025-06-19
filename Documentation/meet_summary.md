@@ -78,3 +78,21 @@ Key task for next meet :
 2. Manually Publish a Dataset for Testing
 3. Explore the Extraction Framework’s Files and Codebase
 
+#
+
+# Coding Phase
+
+## Week 1
+
+Attendees: Sebastian,Milan, Ronit, Priyanshu
+
+Overview:
+We began by outlining the overall project workflow and identifying key tasks. We explored strategies to improve efficiency and address potential challenges. Milan provided a valuable solution for the issue faced by me  related to publishing data, helping me  move forward effectively.
+
+Key Tasks for the Next Meeting:
+
+Develop a crawler to identify all subdomains
+
+Initiate contact with Wikimedia regarding the project approach
+
+Implement data publishing using the designated API
