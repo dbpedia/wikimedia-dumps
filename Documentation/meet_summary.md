@@ -2,7 +2,7 @@
 
 Meeting Summary – Technical Discussion
 
-## Week 1
+## Meet 1
 
 Attendees: Milan, Ronit, Priyanshu
 
@@ -15,7 +15,7 @@ Key task for next meet :
 3. Plan for Structured Publication
 
 
-## Week 2
+## Meet 2
 
 Attendees: Milan, Ronit, Priyanshu
 
@@ -78,11 +78,10 @@ Key task for next meet :
 2. Manually Publish a Dataset for Testing
 3. Explore the Extraction Framework’s Files and Codebase
 
-#
+
 
 # Coding Phase
-
-## Week 1
+## Meet 1
 
 Attendees: Sebastian,Milan, Ronit, Priyanshu
 
@@ -91,8 +90,31 @@ We began by outlining the overall project workflow and identifying key tasks. We
 
 Key Tasks for the Next Meeting:
 
-Develop a crawler to identify all subdomains
+1. Develop a crawler to identify all subdomains
 
-Initiate contact with Wikimedia regarding the project approach
+2. Initiate contact with Wikimedia regarding the project approach
 
-Implement data publishing using the designated API
+3. Implement data publishing using the designated API
+
+## Meet 2
+
+Attendees: Ronit, Priyanshu
+
+Overview: I demonstrated my approach showing how using only the subdomain crawler can help publish data and achieve our goal efficiently.
+
+Key Tasks for the Next Meeting:
+1. Publish data using the current approach
+
+2. Investigate and resolve the hash-related issue
+
+## Meet 3
+
+Attendees: Milan, Ronit, Priyanshu
+
+Overview: I demonstrated and explained the latest dumps I published, along with the related API functionality.
+
+Key Tasks for the Next Meeting:
+1. Complete the publishing process
+
+2. Explore enhancements for the crawler
+

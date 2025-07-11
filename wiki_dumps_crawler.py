@@ -11,7 +11,7 @@ successful_urls = set()
 urls_to_visit = asyncio.Queue()
 
 # File extensions to skip
-skip_extensions = [".bz2", ".xml", ".sql", ".gz", ".zip", ".tar", ".7z"]
+skip_extensions = [".bz2", ".xml", ".sql", ".gz", ".zip", ".tar", ".7z",".html"]
 
 def should_skip(url):
     return any(url.lower().endswith(ext) for ext in skip_extensions)
