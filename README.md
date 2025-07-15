@@ -68,5 +68,20 @@ Starting the Wikimedia dumps crawler script:
 ```bash
 python wiki_dumps_crawler.py
 ```
+#### Step 6 Create .env file 
+```
+DATABUS_API_KEY='your-api-key'
+```
+
+#### Step 7: Run Publishing Script
+After the crawler finishes, all discovered links are saved in the crawled.txt file.
+
+To start the publishing process, run:
+
+```bash
+python wikimedia_publish.py
+```
+
+
 
 

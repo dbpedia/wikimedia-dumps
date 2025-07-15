@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 class RateLimiter:
-    def __init__(self, max_calls_per_second=50):
+    def __init__(self, max_calls_per_second=10):  # Reduced from 50 to 10
         self.max_calls_per_second = max_calls_per_second
         self.calls = []
     
@@ -26,7 +26,7 @@ class RateLimiter:
         self.calls.append(now)
 
 # Global rate limiter
-rate_limiter = RateLimiter(50)
+rate_limiter = RateLimiter(10)  # Reduced from 50 to 10
 
 async def check_if_data_exists(session, wiki_name, job_name, date, api_key):
     """Check if data already exists on Databus"""
@@ -92,6 +92,76 @@ def extract_wiki_info(filename):
         return wiki_name, date
     return None, None
 
+def get_content_variant(filename):
+    """Get content variant based on filename patterns"""
+    if 'stub-meta-history' in filename:
+        return 'history'
+    elif 'stub-meta-current' in filename:
+        return 'current'
+    elif 'stub-articles' in filename:
+        return 'articles'
+    elif 'pages-meta-history' in filename:
+        return 'history'
+    elif 'pages-meta-current' in filename:
+        return 'current'
+    elif 'pages-articles' in filename:
+        return 'articles'
+    elif 'pages-logging' in filename:
+        return 'logging'
+    elif 'abstract' in filename:
+        return 'abstract'
+    elif 'all-titles' in filename:
+        return 'titles'
+    elif 'multistream' in filename:
+        return 'multistream'
+    elif 'category' in filename:
+        return 'category'
+    elif 'external' in filename:
+        return 'external'
+    elif 'image' in filename:
+        return 'image'
+    elif 'pagelinks' in filename:
+        return 'pagelinks'
+    elif 'redirect' in filename:
+        return 'redirect'
+    elif 'template' in filename:
+        return 'template'
+    elif 'langlinks' in filename:
+        return 'langlinks'
+    elif 'iwlinks' in filename:
+        return 'iwlinks'
+    elif 'page_props' in filename:
+        return 'page_props'
+    elif 'protected_titles' in filename:
+        return 'protected_titles'
+    elif 'page_restrictions' in filename:
+        return 'page_restrictions'
+    elif 'user_groups' in filename:
+        return 'user_groups'
+    elif 'user_former_groups' in filename:
+        return 'user_former_groups'
+    elif 'change_tag' in filename:
+        return 'change_tag'
+    elif 'geo_tags' in filename:
+        return 'geo_tags'
+    elif 'site_stats' in filename:
+        return 'site_stats'
+    elif 'babel' in filename:
+        return 'babel'
+    elif 'flagged' in filename:
+        return 'flagged'
+    elif 'wbc_entity_usage' in filename:
+        return 'wbc_entity_usage'
+    elif 'linktarget' in filename:
+        return 'linktarget'
+    elif 'sites' in filename:
+        return 'sites'
+    elif 'namespaces' in filename:
+        return 'namespaces'
+    else:
+        # Use filename without extension as fallback
+        return filename.split('.')[0].split('-')[-1]
+
 def get_file_extension_and_compression(filename):
     """Extract file extension and compression from filename"""
     if filename.endswith('.xml.gz'):
@@ -122,37 +192,54 @@ def create_api_payload(job_name, job_data, wiki_name, date, base_download_url="h
     except:
         formatted_date = date
     
-    distributions = []
     files = job_data.get('files', {})
     
+    # Group files by content variant to create separate distributions
+    file_groups = {}
     for filename, file_info in files.items():
-        file_ext, compression = get_file_extension_and_compression(filename)
+        content_variant = get_content_variant(filename)
+        if content_variant not in file_groups:
+            file_groups[content_variant] = []
+        file_groups[content_variant].append((filename, file_info))
+    
+    # Create separate payloads for each content variant group
+    payloads = []
+    
+    for content_variant, file_list in file_groups.items():
+        distributions = []
         
-        distribution = {
-            "@type": "Part",
-            "formatExtension": file_ext,
-            "compression": compression,
-            # Use hardcoded SHA256 hash  (64 characters)
-            "sha256sum": "6b148c103921f48a2bfa290bd1c7d86730d1a551fce63425a4dc3aa3d63c390f",
-            "dcat:byteSize": file_info.get('size', 0),
-            "downloadURL": base_download_url + file_info.get('url', '')
+        for filename, file_info in file_list:
+            file_ext, compression = get_file_extension_and_compression(filename)
+            
+            distribution = {
+                "@type": "Part",
+                "formatExtension": file_ext,
+                "compression": compression,
+                # Use hardcoded SHA256 hash  (64 characters)
+                "sha256sum": "6b148c103921f48a2bfa290bd1c7d86730d1a551fce63425a4dc3aa3d63c390f",
+                "dcat:byteSize": file_info.get('size', 0),
+                "downloadURL": base_download_url + file_info.get('url', '')
+            }
+            distributions.append(distribution)
+        
+        # Create unique identifier for each content variant
+        unique_job_name = f"{job_name}-{content_variant}" if len(file_groups) > 1 else job_name
+        
+        payload = {
+            "@context": "https://databus.dbpedia.org/res/context.jsonld",
+            "@graph": [{
+                "@type": "Version",
+                "@id": f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{unique_job_name}/{date}",
+                "title": f"{wiki_name} {unique_job_name} dump {formatted_date}",
+                "description": f"Wikimedia {unique_job_name} dump of {wiki_name} for {formatted_date}.",
+                "license": "http://creativecommons.org/licenses/by/4.0/",
+                "distribution": distributions
+            }]
         }
-        distributions.append(distribution)
+        
+        payloads.append((unique_job_name, payload))
     
-    # Fixed @id format - should be /wikimedia/wikiname/date, not /wikimedia/wikiname-jobname/date
-    payload = {
-        "@context": "https://databus.dbpedia.org/res/context.jsonld",
-        "@graph": [{
-            "@type": "Version",
-            "@id": f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}/{date}",
-            "title": f"{wiki_name} {job_name} dump {formatted_date}",
-            "description": f"Wikimedia {job_name} dump of {wiki_name} for {formatted_date}.",
-            "license": "http://creativecommons.org/licenses/by/4.0/",
-            "distribution": distributions
-        }]
-    }
-    
-    return payload
+    return payloads
 
 async def make_api_request(session, payload, api_key):
     """Make the API request to DBpedia Databus"""
@@ -176,7 +263,7 @@ async def make_api_request(session, payload, api_key):
         print(f"Headers: {headers}")
         print(f"Payload size: {len(json_data)} characters")
         
-        async with session.post(url, headers=headers, data=json_data, timeout=30) as response:
+        async with session.post(url, headers=headers, data=json_data, timeout=60) as response:
             response_text = await response.text()
             print(f"Response status: {response.status}")
             if response.status != 200:
@@ -205,66 +292,79 @@ async def make_api_request(session, payload, api_key):
         print(error_msg)
         return None, error_msg
 
-async def process_single_job(session, job_name, job_data, wiki_name, date, api_key):
-    """Process a single job asynchronously"""
+async def process_single_job(session, job_name, job_data, wiki_name, date, api_key, semaphore):
+    """Process a single job asynchronously with semaphore control"""
     
-    print(f"\n--- Processing Job: {job_name} ---")
-    
-    # Skip jobs that are not done
-    if job_data.get('status') != 'done':
-        print(f"  Skipping {job_name} - Status: {job_data.get('status')}")
-        return 'skipped', 'status_not_done'
-    
-    # Check if data already exists
-    try:
-        if await check_if_data_exists(session, wiki_name, job_name, date, api_key):
-            print(f"  Skipping {job_name} - Data already exists")
-            return 'skipped', 'already_exists'
-    except Exception as e:
-        print(f"  Warning: Could not check existence for {job_name}: {e}")
-        # Continue anyway
-    
+    async with semaphore:  # Limit concurrent jobs
+        print(f"\n--- Processing Job: {job_name} ---")
+        
+        # Skip jobs that are not done
+        if job_data.get('status') != 'done':
+            print(f"  Skipping {job_name} - Status: {job_data.get('status')}")
+            return 'skipped', 'status_not_done'
+        
+        # Check if data already exists
+        try:
+            if await check_if_data_exists(session, wiki_name, job_name, date, api_key):
+                print(f"  Skipping {job_name} - Data already exists")
+                return 'skipped', 'already_exists'
+        except Exception as e:
+            print(f"  Warning: Could not check existence for {job_name}: {e}")
+            # Continue anyway
+        
     # Create API payload
-    payload = create_api_payload(job_name, job_data, wiki_name, date)
+    payload_results = create_api_payload(job_name, job_data, wiki_name, date)
     
-    if not payload:
+    if not payload_results:
         print(f"Failed to create payload for {job_name}")
         return 'failed', 'payload_creation_failed'
     
-    files_count = len(payload['@graph'][0]['distribution'])
-    print(f"Created payload for {job_name} with {files_count} files")
+    # Process each payload (multiple for jobs with different content variants)
+    total_successful = 0
+    total_failed = 0
     
-    # Debug: Print sample payload for first job
-    if job_name == list(job_data.keys())[0] if isinstance(job_data, dict) else True:
+    for unique_job_name, payload in payload_results:
+        files_count = len(payload['@graph'][0]['distribution'])
+        print(f"Created payload for {unique_job_name} with {files_count} files")
+        
+        # Debug: Print sample payload for first job
         print("Sample payload:")
         print(json.dumps(payload, indent=2)[:500] + "...")
-    
-    # Make API request
-    status_code, response_text = await make_api_request(session, payload, api_key)
-    
-    if status_code:
-        if status_code == 200:
-            print(f"✓ Successfully published {job_name}")
-            return 'success', 'published'
-        elif status_code == 409:
-            print(f"  {job_name} already exists (409 Conflict)")
-            return 'skipped', 'conflict'
-        elif status_code == 400:
-            print(f"✗ Bad request for {job_name} - Status: {status_code}")
-            print(f"Response: {response_text}")
-            return 'failed', f'http_{status_code}'
-        elif status_code == 401:
-            print(f"✗ Authentication failed for {job_name} - Check API key")
-            return 'failed', f'http_{status_code}'
-        elif status_code == 403:
-            print(f"✗ Forbidden for {job_name} - Check permissions")
-            return 'failed', f'http_{status_code}'
+        
+        # Make API request
+        status_code, response_text = await make_api_request(session, payload, api_key)
+        
+        if status_code:
+            if status_code == 200:
+                print(f"✓ Successfully published {unique_job_name}")
+                total_successful += 1
+            elif status_code == 409:
+                print(f"  {unique_job_name} already exists (409 Conflict)")
+                # Don't count as failure
+            elif status_code == 400:
+                print(f"✗ Bad request for {unique_job_name} - Status: {status_code}")
+                print(f"Response: {response_text}")
+                total_failed += 1
+            elif status_code == 401:
+                print(f"✗ Authentication failed for {unique_job_name} - Check API key")
+                total_failed += 1
+            elif status_code == 403:
+                print(f"✗ Forbidden for {unique_job_name} - Check permissions")
+                total_failed += 1
+            else:
+                print(f"✗ Failed to publish {unique_job_name} - Status: {status_code}")
+                print(f"Response: {response_text[:300]}...")
+                total_failed += 1
         else:
-            print(f"✗ Failed to publish {job_name} - Status: {status_code}")
-            print(f"Response: {response_text[:300]}...")
-            return 'failed', f'http_{status_code}'
+            print(f"✗ Failed to make request for {unique_job_name}: {response_text}")
+            total_failed += 1
+    
+    # Return based on overall success
+    if total_successful > 0 and total_failed == 0:
+        return 'success', 'published'
+    elif total_successful > 0 and total_failed > 0:
+        return 'partial', 'partially_published'
     else:
-        print(f"✗ Failed to make request for {job_name}: {response_text}")
         return 'failed', 'request_failed'
 
 async def process_all_jobs(session, json_data, api_key, dump_status_url):
@@ -290,10 +390,13 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
     print(f"Processing dumps for {wiki_name} on {date}")
     print(f"Found {len(jobs)} jobs to process")
     
+    # Create semaphore to limit concurrent jobs
+    semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent jobs per wiki
+    
     # Create tasks for all jobs
     tasks = []
     for job_name, job_data in jobs.items():
-        task = process_single_job(session, job_name, job_data, wiki_name, date, api_key)
+        task = process_single_job(session, job_name, job_data, wiki_name, date, api_key, semaphore)
         tasks.append((job_name, task))
     
     # Execute all tasks concurrently
@@ -303,6 +406,7 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
     successful_jobs = 0
     failed_jobs = 0
     skipped_jobs = 0
+    partial_jobs = 0
     
     for i, (job_name, result) in enumerate(zip([name for name, _ in tasks], results)):
         if isinstance(result, Exception):
@@ -316,14 +420,17 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
                 failed_jobs += 1
             elif status == 'skipped':
                 skipped_jobs += 1
+            elif status == 'partial':
+                partial_jobs += 1
     
     print(f"\n--- Summary ---")
     print(f"Successful: {successful_jobs}")
+    print(f"Partial: {partial_jobs}")
     print(f"Failed: {failed_jobs}")
     print(f"Skipped: {skipped_jobs}")
-    print(f"Total: {successful_jobs + failed_jobs + skipped_jobs}")
+    print(f"Total: {successful_jobs + partial_jobs + failed_jobs + skipped_jobs}")
     
-    return successful_jobs > 0
+    return (successful_jobs + partial_jobs) > 0
 
 async def process_multiple_wikis(urls_file, api_key):
     """Process multiple wiki dump URLs from a file asynchronously"""
@@ -337,34 +444,61 @@ async def process_multiple_wikis(urls_file, api_key):
         print(f"Processing {len(dump_status_urls)} wiki dumps")
         
         # Create aiohttp session with connection limits
-        connector = aiohttp.TCPConnector(limit=100, limit_per_host=50)
-        timeout = aiohttp.ClientTimeout(total=60)
+        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)  # Reduced limits
+        timeout = aiohttp.ClientTimeout(total=120)  # Increased timeout
         
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            # Create tasks for all wikis
-            tasks = []
-            for i, url in enumerate(dump_status_urls, 1):
-                print(f"Queuing {i}/{len(dump_status_urls)}: {url}")
-                task = fetch_and_process_dump_status(session, url, api_key)
-                tasks.append((url, task))
-            
-            print(f"\nProcessing all {len(tasks)} wikis concurrently...")
-            
-            # Execute all tasks concurrently
-            results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
-            
-            # Process results
+            # Process wikis in batches to reduce load
+            batch_size = 10  # Process 10 wikis at a time
             successful_wikis = 0
             failed_wikis = 0
             
-            for i, (url, result) in enumerate(zip([url for url, _ in tasks], results)):
-                if isinstance(result, Exception):
-                    print(f"Exception processing {url}: {result}")
-                    failed_wikis += 1
-                elif result:
-                    successful_wikis += 1
-                else:
-                    failed_wikis += 1
+            for i in range(0, len(dump_status_urls), batch_size):
+                batch_urls = dump_status_urls[i:i+batch_size]
+                batch_num = i // batch_size + 1
+                total_batches = (len(dump_status_urls) + batch_size - 1) // batch_size
+                
+                print(f"\n{'='*60}")
+                print(f"Processing batch {batch_num}/{total_batches} ({len(batch_urls)} wikis)")
+                print(f"{'='*60}")
+                
+                # Create tasks for current batch
+                tasks = []
+                for j, url in enumerate(batch_urls, 1):
+                    print(f"Queuing {i + j}/{len(dump_status_urls)}: {url}")
+                    task = fetch_and_process_dump_status(session, url, api_key)
+                    tasks.append((url, task))
+                
+                print(f"\nProcessing batch {batch_num} with {len(tasks)} wikis...")
+                
+                # Execute batch tasks concurrently
+                results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+                
+                # Process batch results
+                batch_successful = 0
+                batch_failed = 0
+                
+                for j, (url, result) in enumerate(zip([url for url, _ in tasks], results)):
+                    if isinstance(result, Exception):
+                        print(f"Exception processing {url}: {result}")
+                        batch_failed += 1
+                    elif result:
+                        batch_successful += 1
+                    else:
+                        batch_failed += 1
+                
+                successful_wikis += batch_successful
+                failed_wikis += batch_failed
+                
+                print(f"\nBatch {batch_num} Summary:")
+                print(f"  Successful: {batch_successful}")
+                print(f"  Failed: {batch_failed}")
+                print(f"  Total: {batch_successful + batch_failed}")
+                
+                # Add delay between batches to avoid overwhelming the server
+                if i + batch_size < len(dump_status_urls):
+                    print(f"Waiting 10 seconds before next batch...")
+                    await asyncio.sleep(10)
             
             print(f"\n{'='*60}")
             print(f"FINAL SUMMARY")
@@ -378,32 +512,6 @@ async def process_multiple_wikis(urls_file, api_key):
     except Exception as e:
         print(f"Error processing URLs file: {e}")
 
-async def test_api_connectivity(api_key):
-    """Test basic API connectivity"""
-    
-    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-    timeout = aiohttp.ClientTimeout(total=30)
-    
-    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-        # Test a simple GET request first
-        test_url = "https://databus.dbpedia.org/api/health"  # or any simple endpoint
-        
-        headers = {
-            'accept': 'application/json',
-            'X-API-KEY': api_key
-        }
-        
-        try:
-            print("Testing API connectivity...")
-            async with session.get(test_url, headers=headers, timeout=10) as response:
-                print(f"API test response: {response.status}")
-                response_text = await response.text()
-                print(f"API test body: {response_text[:200]}")
-                return True
-        except Exception as e:
-            print(f"API connectivity test failed: {e}")
-            return False
-
 async def main():
     # Configuration
     API_KEY = os.getenv("DATABUS_API_KEY")
@@ -413,11 +521,6 @@ async def main():
         return
     
     print(f"Using API key: {API_KEY[:10]}...{API_KEY[-4:] if len(API_KEY) > 14 else API_KEY}")
-    
-    # Test API connectivity first
-    if not await test_api_connectivity(API_KEY):
-        print("API connectivity test failed. Exiting.")
-        return
     
     urls_file = "crawled_urls.txt"
     await process_multiple_wikis(urls_file, API_KEY)
