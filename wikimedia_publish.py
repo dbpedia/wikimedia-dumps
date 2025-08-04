@@ -4,6 +4,8 @@ import json
 import os
 from datetime import datetime
 import time
+from dotenv import load_dotenv
+load_dotenv()
 
 class RateLimiter:
     def __init__(self, max_calls_per_second=10):  # Reduced from 50 to 10
@@ -29,32 +31,54 @@ class RateLimiter:
 rate_limiter = RateLimiter(10)  # Reduced from 50 to 10
 
 async def check_if_data_exists(session, wiki_name, job_name, date, api_key):
-    """Check if data already exists on Databus"""
+    """Check if data already exists on Databus using SPARQL endpoint"""
     
     databus_id = f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{job_name}/{date}"
     
     try:
         await rate_limiter.acquire()
         
-        check_url = f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{job_name}/{date}"
+        # SPARQL query to check if the version exists - using correct namespace
+        sparql_query = f"""
+        PREFIX databus: <https://dataid.dbpedia.org/databus#>
         
-        headers = {
-            'accept': 'application/json',
-            'X-API-KEY': api_key
+        ASK {{
+            <{databus_id}> a databus:Version .
+        }}
+        """
+        
+        sparql_url = "https://databus.dev.dbpedia.link/sparql"
+        
+        # Prepare form data for SPARQL endpoint
+        data = {
+            'query': sparql_query.strip(),
+            'format': 'json'
         }
         
-        async with session.get(check_url, headers=headers, timeout=10) as response:
+        headers = {
+            'Accept': 'application/sparql-results+json',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        
+        print(f"  Checking existence via SPARQL: {databus_id}")
+        
+        async with session.post(sparql_url, data=data, headers=headers, timeout=15) as response:
             if response.status == 200:
-                print(f"Data already exists: {databus_id}")
-                return True
-            elif response.status == 404:
-                return False
+                result = await response.json()
+                # ASK query returns boolean in 'boolean' field
+                exists = result.get('boolean', False)
+                if exists:
+                    print(f"  ✓ Data already exists in Databus: {databus_id}")
+                    return True
+                else:
+                    print(f"  ✗ Data not found in Databus: {databus_id}")
+                    return False
             else:
-                print(f"Could not verify existence (Status: {response.status}), proceeding...")
+                print(f"  SPARQL query failed (Status: {response.status}), proceeding...")
                 return False
                 
     except Exception as e:
-        print(f"Error checking existence: {e}, proceeding...")
+        print(f"  Error checking existence via SPARQL: {e}, proceeding...")
         return False
 
 async def fetch_and_process_dump_status(session, dump_status_url, api_key):
@@ -232,7 +256,7 @@ def create_api_payload(job_name, job_data, wiki_name, date, base_download_url="h
                 "@id": f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{unique_job_name}/{date}",
                 "title": f"{wiki_name} {unique_job_name} dump {formatted_date}",
                 "description": f"Wikimedia {unique_job_name} dump of {wiki_name} for {formatted_date}.",
-                "license": "http://creativecommons.org/licenses/by/4.0/",
+                "license": "https://creativecommons.org/licenses/by-sa/4.0/",
                 "distribution": distributions
             }]
         }
@@ -303,16 +327,7 @@ async def process_single_job(session, job_name, job_data, wiki_name, date, api_k
             print(f"  Skipping {job_name} - Status: {job_data.get('status')}")
             return 'skipped', 'status_not_done'
         
-        # Check if data already exists
-        try:
-            if await check_if_data_exists(session, wiki_name, job_name, date, api_key):
-                print(f"  Skipping {job_name} - Data already exists")
-                return 'skipped', 'already_exists'
-        except Exception as e:
-            print(f"  Warning: Could not check existence for {job_name}: {e}")
-            # Continue anyway
-        
-    # Create API payload
+    # Create API payload first to get the actual unique job names
     payload_results = create_api_payload(job_name, job_data, wiki_name, date)
     
     if not payload_results:
@@ -322,8 +337,19 @@ async def process_single_job(session, job_name, job_data, wiki_name, date, api_k
     # Process each payload (multiple for jobs with different content variants)
     total_successful = 0
     total_failed = 0
+    total_skipped = 0
     
     for unique_job_name, payload in payload_results:
+        # Check if this specific unique job already exists
+        try:
+            if await check_if_data_exists(session, wiki_name, unique_job_name, date, api_key):
+                print(f"  Skipping {unique_job_name} - Data already exists")
+                total_skipped += 1
+                continue
+        except Exception as e:
+            print(f"  Warning: Could not check existence for {unique_job_name}: {e}")
+            # Continue anyway
+        
         files_count = len(payload['@graph'][0]['distribution'])
         print(f"Created payload for {unique_job_name} with {files_count} files")
         
@@ -340,7 +366,7 @@ async def process_single_job(session, job_name, job_data, wiki_name, date, api_k
                 total_successful += 1
             elif status_code == 409:
                 print(f"  {unique_job_name} already exists (409 Conflict)")
-                # Don't count as failure
+                total_skipped += 1
             elif status_code == 400:
                 print(f"✗ Bad request for {unique_job_name} - Status: {status_code}")
                 print(f"Response: {response_text}")
@@ -360,7 +386,9 @@ async def process_single_job(session, job_name, job_data, wiki_name, date, api_k
             total_failed += 1
     
     # Return based on overall success
-    if total_successful > 0 and total_failed == 0:
+    if total_skipped > 0 and total_successful == 0 and total_failed == 0:
+        return 'skipped', 'already_exists'
+    elif total_successful > 0 and total_failed == 0:
         return 'success', 'published'
     elif total_successful > 0 and total_failed > 0:
         return 'partial', 'partially_published'
