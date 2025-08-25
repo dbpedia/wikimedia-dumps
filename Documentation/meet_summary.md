@@ -118,3 +118,18 @@ Key Tasks for the Next Meeting:
 
 2. Explore enhancements for the crawler
 
+## Meet 4
+
+Attendees: Milan, Ronit, Priyanshu
+Overview : discuss around thing compleeted and  discussion around databus api rate limit &&using sparql to check already published thing
+
+Key Task for Next Meeting : 
+1. adding Sparql to test data already exists on databus 
+2. Improving exist thing try to optimized 
+
+## Meet 5
+
+Attendees:  Sebastian,Ronit, Priyanshu
+Overview: iterated on the feedback of mid term and update things 
+1.Test wiki on different testing on enwiki wiki data
+2. Test Custom publish.

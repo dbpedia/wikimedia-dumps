@@ -47,7 +47,7 @@ async def check_if_data_exists(session, wiki_name, job_name, date, api_key):
         }}
         """
         
-        sparql_url = "https://databus.dev.dbpedia.link/sparql"
+        sparql_url = "https://databus.dbpedia.org/sparql"
         
         # Prepare form data for SPARQL endpoint
         data = {
