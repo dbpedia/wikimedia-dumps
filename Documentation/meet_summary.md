@@ -121,6 +121,7 @@ Key Tasks for the Next Meeting:
 ## Meet 4
 
 Attendees: Milan, Ronit, Priyanshu
+
 Overview : discuss around thing compleeted and  discussion around databus api rate limit &&using sparql to check already published thing
 
 Key Task for Next Meeting : 
@@ -130,6 +131,11 @@ Key Task for Next Meeting :
 ## Meet 5
 
 Attendees:  Sebastian,Ronit, Priyanshu
+
 Overview: iterated on the feedback of mid term and update things 
-1.Test wiki on different testing on enwiki wiki data
+
+Key Task for Next Meeting : 
+
+1. Test wiki on different testing on enwiki wiki data
+
 2. Test Custom publish.
