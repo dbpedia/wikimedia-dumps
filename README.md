@@ -12,3 +12,76 @@ Wikimedia publishes their dumps via https://dumps.wikimedia.org . At the moment,
 * this would help us to 1. track new releases from wikimedia, so the core team and the community can more systematically convert them to RDF as well as to 2. build more solid applications on top, i.e. DIEF or other
 * process wise I would think that having an early prototype is necessary and then plan iterations from this.
 
+##  Project Setup Guide
+
+###  Prerequisites
+
+1. Python **3.13.0**
+2. Git
+3. WSL (Optional, for Linux-based environment support)
+
+
+
+###  Setup Instructions
+
+#### Step 1: Clone the Repository
+
+Make sure to fork the repository first, then clone your fork:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/wikimedia-dumps.git
+cd wikimedia-dumps
+```
+
+#### Step 2: Switch to the `dev` Branch
+
+Ensure you are on the development branch:
+
+```bash
+git checkout dev
+```
+
+#### Step 3: Verify Directory
+
+Make sure your working directory ends with `wikimedia-dumps`:
+
+```bash
+pwd  # should end with /wikimedia-dumps
+```
+
+#### Step 4: Set Up Python Environment
+
+Create and activate a virtual environment, then install dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # For Linux/macOS or WSL
+# .venv\Scripts\activate    # For Windows
+
+pip install -r requirements.txt
+```
+
+#### Step 5: Run the Crawler
+
+Starting the Wikimedia dumps crawler script:
+
+```bash
+python wiki_dumps_crawler.py
+```
+#### Step 6 Create .env file 
+```
+DATABUS_API_KEY='your-api-key'
+```
+
+#### Step 7: Run Publishing Script
+After the crawler finishes, all discovered links are saved in the crawled.txt file.
+
+To start the publishing process, run:
+
+```bash
+python wikimedia_publish.py
+```
+
+
+
+

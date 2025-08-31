@@ -2,7 +2,7 @@
 
 Meeting Summary – Technical Discussion
 
-## Week 1
+## Meet 1
 
 Attendees: Milan, Ronit, Priyanshu
 
@@ -15,7 +15,7 @@ Key task for next meet :
 3. Plan for Structured Publication
 
 
-## Week 2
+## Meet 2
 
 Attendees: Milan, Ronit, Priyanshu
 
@@ -78,3 +78,64 @@ Key task for next meet :
 2. Manually Publish a Dataset for Testing
 3. Explore the Extraction Framework’s Files and Codebase
 
+
+
+# Coding Phase
+## Meet 1
+
+Attendees: Sebastian,Milan, Ronit, Priyanshu
+
+Overview:
+We began by outlining the overall project workflow and identifying key tasks. We explored strategies to improve efficiency and address potential challenges. Milan provided a valuable solution for the issue faced by me  related to publishing data, helping me  move forward effectively.
+
+Key Tasks for the Next Meeting:
+
+1. Develop a crawler to identify all subdomains
+
+2. Initiate contact with Wikimedia regarding the project approach
+
+3. Implement data publishing using the designated API
+
+## Meet 2
+
+Attendees: Ronit, Priyanshu
+
+Overview: I demonstrated my approach showing how using only the subdomain crawler can help publish data and achieve our goal efficiently.
+
+Key Tasks for the Next Meeting:
+1. Publish data using the current approach
+
+2. Investigate and resolve the hash-related issue
+
+## Meet 3
+
+Attendees: Milan, Ronit, Priyanshu
+
+Overview: I demonstrated and explained the latest dumps I published, along with the related API functionality.
+
+Key Tasks for the Next Meeting:
+1. Complete the publishing process
+
+2. Explore enhancements for the crawler
+
+## Meet 4
+
+Attendees: Milan, Ronit, Priyanshu
+
+Overview : discuss around thing compleeted and  discussion around databus api rate limit &&using sparql to check already published thing
+
+Key Task for Next Meeting : 
+1. adding Sparql to test data already exists on databus 
+2. Improving exist thing try to optimized 
+
+## Meet 5
+
+Attendees:  Sebastian,Ronit, Priyanshu
+
+Overview: iterated on the feedback of mid term and update things 
+
+Key Task for Next Meeting : 
+
+1. Test wiki on different testing on enwiki wiki data
+
+2. Test Custom publish.
