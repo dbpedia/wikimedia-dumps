@@ -30,10 +30,48 @@ class RateLimiter:
 # Global rate limiter
 rate_limiter = RateLimiter(10)  # Reduced from 50 to 10
 
-async def check_if_data_exists(session, wiki_name, job_name, date, api_key):
+# Databus configuration
+DATABUS_USER = "tech1priyanshu"  # Configurable user - can be changed anytime
+
+# Job filtering configuration
+# To only publish specific jobs, add them to ALLOWED_JOBS list
+# To publish all jobs except some, leave ALLOWED_JOBS empty and add jobs to BLOCKED_JOBS
+# Examples:
+#   ALLOWED_JOBS = ["articlesdumprecombine"]  # Only publish articlesdumprecombine
+#   ALLOWED_JOBS = []  # Publish all jobs
+#   BLOCKED_JOBS = ["xmlstubsdump", "metacurrentdump"]  # Skip these specific jobs
+ALLOWED_JOBS = ["articlesdumprecombine"]  # Only publish this job
+BLOCKED_JOBS = []  # Additional jobs to block (applied after ALLOWED_JOBS)
+
+def should_process_job(job_name):
+    """
+    Determine if a job should be processed based on filtering configuration.
+    
+    Args:
+        job_name (str): Name of the job to check
+        
+    Returns:
+        bool: True if job should be processed, False if it should be skipped
+    """
+    # If ALLOWED_JOBS is not empty, only process jobs in the allowed list
+    if ALLOWED_JOBS and job_name not in ALLOWED_JOBS:
+        return False
+    
+    # If job is in BLOCKED_JOBS, skip it
+    if job_name in BLOCKED_JOBS:
+        return False
+    
+    return True
+
+async def check_if_data_exists(session, wiki_name, job_name, version_info, api_key):
     """Check if data already exists on Databus using SPARQL endpoint"""
     
-    databus_id = f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{job_name}/{date}"
+    # Use new URL structure for articlesdumprecombine, old structure for others
+    if job_name == "articlesdumprecombine":
+        databus_id = f"https://databus.dbpedia.org/{DATABUS_USER}/{wiki_name}/articlesdumprecombine/{version_info}"
+    else:
+        # Keep old format for other jobs (though they'll be filtered out)
+        databus_id = f"https://databus.dbpedia.org/{DATABUS_USER}/wikimedia/{wiki_name}-{job_name}/{version_info}"
     
     try:
         await rate_limiter.acquire()
@@ -208,13 +246,19 @@ def get_file_extension_and_compression(filename):
             return ext, 'none'
         return 'unknown', 'none'
 
-def create_api_payload(job_name, job_data, wiki_name, date, base_download_url="https://dumps.wikimedia.org"):
+def create_api_payload(job_name, job_data, wiki_name, version_info, base_download_url="https://dumps.wikimedia.org"):
     """Create API payload for a specific job"""
     
     try:
-        formatted_date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+        # For articlesdumprecombine, version_info is JSON version (like "0.8")
+        # For other jobs, version_info is date (like "20250620")
+        if job_name == "articlesdumprecombine":
+            formatted_version = version_info  # Use JSON version as-is
+        else:
+            # Format date for other jobs
+            formatted_version = f"{version_info[:4]}-{version_info[4:6]}-{version_info[6:8]}"
     except:
-        formatted_date = date
+        formatted_version = version_info
     
     files = job_data.get('files', {})
     
@@ -249,13 +293,23 @@ def create_api_payload(job_name, job_data, wiki_name, date, base_download_url="h
         # Create unique identifier for each content variant
         unique_job_name = f"{job_name}-{content_variant}" if len(file_groups) > 1 else job_name
         
+        # Use new URL structure for articlesdumprecombine, old structure for others
+        if job_name == "articlesdumprecombine":
+            databus_id = f"https://databus.dbpedia.org/{DATABUS_USER}/{wiki_name}/articlesdumprecombine/{version_info}"
+            title = f"{wiki_name} articlesdumprecombine dump version {version_info}"
+            description = f"Wikimedia articlesdumprecombine dump of {wiki_name} for version {version_info}."
+        else:
+            databus_id = f"https://databus.dbpedia.org/{DATABUS_USER}/wikimedia/{wiki_name}-{unique_job_name}/{version_info}"
+            title = f"{wiki_name} {unique_job_name} dump {formatted_version}"
+            description = f"Wikimedia {unique_job_name} dump of {wiki_name} for {formatted_version}."
+        
         payload = {
             "@context": "https://databus.dbpedia.org/res/context.jsonld",
             "@graph": [{
                 "@type": "Version",
-                "@id": f"https://databus.dbpedia.org/tech0priyanshu/wikimedia/{wiki_name}-{unique_job_name}/{date}",
-                "title": f"{wiki_name} {unique_job_name} dump {formatted_date}",
-                "description": f"Wikimedia {unique_job_name} dump of {wiki_name} for {formatted_date}.",
+                "@id": databus_id,
+                "title": title,
+                "description": description,
                 "license": "https://creativecommons.org/licenses/by-sa/4.0/",
                 "distribution": distributions
             }]
@@ -316,19 +370,27 @@ async def make_api_request(session, payload, api_key):
         print(error_msg)
         return None, error_msg
 
-async def process_single_job(session, job_name, job_data, wiki_name, date, api_key, semaphore):
+async def process_single_job(session, job_name, job_data, wiki_name, date, json_version, api_key, semaphore):
     """Process a single job asynchronously with semaphore control"""
     
     async with semaphore:  # Limit concurrent jobs
         print(f"\n--- Processing Job: {job_name} ---")
+        
+        # Check if job should be processed based on filtering configuration
+        if not should_process_job(job_name):
+            print(f"  Skipping {job_name} - Job filtered out (not in allowed list or in blocked list)")
+            return 'skipped', 'job_filtered'
         
         # Skip jobs that are not done
         if job_data.get('status') != 'done':
             print(f"  Skipping {job_name} - Status: {job_data.get('status')}")
             return 'skipped', 'status_not_done'
         
+    # Use JSON version for articlesdumprecombine, date for others
+    version_info = json_version if job_name == "articlesdumprecombine" else date
+    
     # Create API payload first to get the actual unique job names
-    payload_results = create_api_payload(job_name, job_data, wiki_name, date)
+    payload_results = create_api_payload(job_name, job_data, wiki_name, version_info)
     
     if not payload_results:
         print(f"Failed to create payload for {job_name}")
@@ -342,7 +404,7 @@ async def process_single_job(session, job_name, job_data, wiki_name, date, api_k
     for unique_job_name, payload in payload_results:
         # Check if this specific unique job already exists
         try:
-            if await check_if_data_exists(session, wiki_name, unique_job_name, date, api_key):
+            if await check_if_data_exists(session, wiki_name, unique_job_name, version_info, api_key):
                 print(f"  Skipping {unique_job_name} - Data already exists")
                 total_skipped += 1
                 continue
@@ -400,6 +462,10 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
     
     jobs = json_data.get("jobs", {})
     
+    # Extract JSON version
+    json_version = json_data.get("version", "unknown")
+    print(f"Extracted JSON version: {json_version}")
+    
     # Extract wiki info from the first job's first file
     wiki_name = None
     date = None
@@ -416,7 +482,24 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
         return False
     
     print(f"Processing dumps for {wiki_name} on {date}")
+    print(f"Using JSON version: {json_version} for articlesdumprecombine")
     print(f"Found {len(jobs)} jobs to process")
+    
+    # Show filter configuration
+    if ALLOWED_JOBS:
+        print(f"Job filter: Only processing jobs: {ALLOWED_JOBS}")
+    if BLOCKED_JOBS:
+        print(f"Job filter: Blocking jobs: {BLOCKED_JOBS}")
+    if not ALLOWED_JOBS and not BLOCKED_JOBS:
+        print("Job filter: Processing all jobs (no filters applied)")
+    
+    # Count jobs that will actually be processed
+    jobs_to_process = [job_name for job_name in jobs.keys() if should_process_job(job_name)]
+    filtered_jobs = [job_name for job_name in jobs.keys() if not should_process_job(job_name)]
+    
+    print(f"Jobs to process: {len(jobs_to_process)}")
+    if filtered_jobs:
+        print(f"Jobs filtered out: {len(filtered_jobs)} - {filtered_jobs}")
     
     # Create semaphore to limit concurrent jobs
     semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent jobs per wiki
@@ -424,7 +507,7 @@ async def process_all_jobs(session, json_data, api_key, dump_status_url):
     # Create tasks for all jobs
     tasks = []
     for job_name, job_data in jobs.items():
-        task = process_single_job(session, job_name, job_data, wiki_name, date, api_key, semaphore)
+        task = process_single_job(session, job_name, job_data, wiki_name, date, json_version, api_key, semaphore)
         tasks.append((job_name, task))
     
     # Execute all tasks concurrently
