@@ -12,6 +12,35 @@ Wikimedia publishes their dumps via https://dumps.wikimedia.org . At the moment,
 * this would help us to 1. track new releases from wikimedia, so the core team and the community can more systematically convert them to RDF as well as to 2. build more solid applications on top, i.e. DIEF or other
 * process wise I would think that having an early prototype is necessary and then plan iterations from this.
 
+### Architecture Overview
+
+The following diagram illustrates the high-level workflow of the Wikimedia Dumps automation pipeline, from crawling Wikimedia dump pages to publishing metadata on the Databus for SPARQL-based querying.
+
+```mermaid
+flowchart TD
+    A[Wikimedia Dumps Website<br/>dumps.wikimedia.org] 
+        -->|Fetch dump index pages| B[HTTP Request Layer]
+
+    B -->|Successful response| C[wiki_dumps_crawler.py]
+    B -->|Failure / Timeout| B1[Retry & Log Error]
+
+    C -->|Parse HTML pages| D{New dump available?}
+
+    D -->|Yes| E[Extract dump URLs & metadata]
+    D -->|No| F[Skip & Wait for next run]
+
+    E --> G[crawled_urls.txt<br/>Store discovered dump links]
+
+    G -->|Read stored URLs| H[wikimedia_publish.py]
+
+    H -->|Validate metadata| I{Valid Databus config?}
+    I -->|No| I1[Abort & Log error]
+    I -->|Yes| J[Generate RDF metadata]
+
+    J -->|Publish| K[Databus API]
+    K --> L[Databus Knowledge Graph<br/>Queryable via SPARQL]
+```
+
 ##  Project Setup Guide
 
 ###  Prerequisites
