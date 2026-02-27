@@ -16,6 +16,33 @@ skip_extensions = [".bz2", ".xml", ".sql", ".gz", ".zip", ".tar", ".7z"]
 def should_skip(url):
     return any(url.lower().endswith(ext) for ext in skip_extensions)
 
+
+async def is_finished_dump(session, url):
+    # we only care about wiki/date folders
+    parts = url.strip("/").split("/")
+    
+    # expect: dumps.wikimedia.org/<wiki>/<date>/
+    if len(parts) < 5:
+        return False
+    
+    wiki = parts[-2]
+    date = parts[-1]
+
+    if not date.isdigit() or len(date) != 8:
+        return False
+
+    dumpstatus = url + "dumpstatus.json"
+
+    try:
+        async with session.get(dumpstatus, timeout=15) as r:
+            if r.status != 200:
+                return False
+            
+            data = await r.json()
+            return data.get("status") == "done"
+    except:
+        return False
+
 async def fetch_and_parse(session, url):
     try:
         async with session.get(url, timeout=10) as response:
@@ -28,7 +55,6 @@ async def fetch_and_parse(session, url):
                 print(f"Non-HTML content skipped: {url}")
                 return []
 
-            successful_urls.add(url)
 
             html = await response.text()
             soup = BeautifulSoup(html, "html.parser")
@@ -64,6 +90,9 @@ async def worker(session, worker_id):
         print(f"Worker {worker_id} crawling: {url}")
         visited_urls.add(url)
         new_links = await fetch_and_parse(session, url)
+        if await is_finished_dump(session, url):
+            print(f"FOUND COMPLETED DUMP: {url}")
+            successful_urls.add(url)
 
         for link in new_links:
             if link not in visited_urls:
